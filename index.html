@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Score Monitoring</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        /* --- CSS Variables pour Thèmes (Dark/Light) --- */
+        :root {
+            /* Couleurs Universelles */
+            --color-primary: #007bff;
+            --color-success: #28a745; 
+            --color-warning: #ffc107; 
+            --color-error: #dc3545; 
+            --font-family: 'Inter', sans-serif;
+            --transition-speed: 0.3s;
+        }
+
+        /* Variables pour le Dark Mode (par défaut) */
+        :root, body.dark-mode {
+            --color-bg-main: #1e1e2f;
+            --color-bg-card: #27293d;
+            --color-text-main: #f0f0f0;
+            --color-text-secondary: #a0a0a0;
+            --color-border: #3c3f58;
+            --color-log-bg: #151523;
+            --color-input-bg: #3c3f58;
+        }
+
+        /* Variables pour le Light Mode */
+        body.light-mode {
+            --color-bg-main: #f4f7f6;
+            --color-bg-card: #ffffff;
+            --color-text-main: #333333;
+            --color-text-secondary: #6c757d;
+            --color-border: #e0e0e0;
+            --color-log-bg: #f9f9f9;
+            --color-input-bg: #ffffff;
+        }
+
+        /* --- Styles de Base --- */
+        body {
+            font-family: var(--font-family);
+            background-color: var(--color-bg-main);
+            color: var(--color-text-main);
+            margin: 0;
+            padding: 0;
+            line-height: 1.5;
+            transition: background-color var(--transition-speed), color var(--transition-speed);
+        }
+
+        /* Barre de navigation (Header) */
+        .navbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 70px; 
+            padding: 0 30px; 
+            background-color: var(--color-bg-card);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .logo { font-size: 1.6em; font-weight: 800; }
+        .status-group { display: flex; gap: 15px; align-items: center; }
+        .status-pill {
+            padding: 5px 12px; border-radius: 20px; font-weight: 600; font-size: 0.85em;
+            text-transform: uppercase; color: #fff;
+        }
+        .status-running { background-color: var(--color-success); }
+        .status-error { background-color: var(--color-error); }
+        .theme-toggle-btn {
+            background: var(--color-input-bg);
+            color: var(--color-text-main);
+            border: 1px solid var(--color-border);
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background-color var(--transition-speed), color var(--transition-speed);
+        }
+
+        /* Grille Principale (CSS Grid) */
+        .dashboard-layout {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr); 
+            gap: 20px;
+            padding: 20px;
+        }
+        @media (max-width: 1200px) {
+            .dashboard-layout { grid-template-columns: repeat(2, 1fr); }
+            .span-4 { grid-column: span 2; }
+        }
+        @media (max-width: 768px) {
+            .dashboard-layout { grid-template-columns: 1fr; }
+            .span-4 { grid-column: span 1; }
+        }
+
+        /* Cartes KPI */
+        .kpi-card {
+            background-color: var(--color-bg-card); border-radius: 10px; 
+            padding: 10px 15px; 
+            height: 70px; 
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            text-align: center; box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1); transition: transform var(--transition-speed);
+        }
+        .kpi-card:hover { transform: translateY(-5px); }
+        .kpi-label { font-size: 0.8em; color: var(--color-text-secondary); display: block; margin-bottom: 2px; }
+        .kpi-value { font-size: 2em; font-weight: 800; color: var(--color-primary); margin: 0; }
+        .kpi-value.error-level { color: var(--color-error); }
+        
+        /* Contenu Général & Log Stream */
+        .content-card {
+            background-color: var(--color-bg-card);
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+            position: relative; 
+        }
+        .content-card h2 {
+            color: var(--color-text-main); font-size: 1.4em; margin-top: 0; padding-bottom: 10px;
+            border-bottom: 1px solid var(--color-border);
+        }
+        
+        /* Bouton d'expansion/réduction */
+        .expand-btn {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: none;
+            border: none;
+            color: var(--color-text-secondary);
+            cursor: pointer;
+            font-size: 1.2em;
+            width: 30px; 
+            height: 30px;
+            z-index: 10; 
+        }
+        .expand-btn:hover {
+            color: var(--color-primary);
+        }
+
+        /* Flux de Logs */
+        .log-stream-card { grid-column: 1 / -1; } 
+        .log-controls { display: flex; gap: 15px; margin-bottom: 15px; flex-wrap: wrap; }
+        .log-controls input {
+            padding: 10px; border: 1px solid var(--color-border); border-radius: 6px;
+            background-color: var(--color-input-bg); color: var(--color-text-main);
+            flex-grow: 1; min-width: 150px;
+        }
+        #log-filter-unified { min-width: 250px; flex-grow: 2; }
+
+        .log-display-area {
+            height: 400px; overflow-y: scroll; border: 1px solid var(--color-border);
+            padding: 10px; background-color: var(--color-log-bg); font-family: monospace;
+            white-space: pre-wrap; font-size: 0.85em; border-radius: 6px;
+        }
+        .log-entry { 
+            border-bottom: 1px dashed var(--color-border); 
+            padding: 5px 0; 
+            cursor: pointer; /* Indiquer que l'élément est cliquable */
+            transition: background-color 0.1s;
+        }
+        .log-entry:hover {
+            background-color: rgba(0, 123, 255, 0.1);
+        }
+        .log-entry:last-child { border-bottom: none; }
+
+        /* Couleurs des Niveaux de Log */
+        .log-error { color: var(--color-error); font-weight: bold; }
+        .log-warning { color: var(--color-warning); }
+        .log-info { color: var(--color-text-secondary); }
+        .log-time { color: var(--color-primary); }
+        .log-url { font-style: italic; }
+
+        /* --- Styles du Plein Écran --- */
+        .fullscreen-table {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 999; 
+            background-color: var(--color-bg-card); border-radius: 0; margin: 0; padding: 30px;
+            box-shadow: none; grid-column: 1 / -1 !important; transition: all var(--transition-speed) ease-in-out;
+            display: flex; flex-direction: column;
+        }
+        .fullscreen-table .log-display-area { flex-grow: 1; max-height: none; height: auto; }
+
+
+        /* --- Styles de la Modale d'Erreur (Réintroduit) --- */
+        .modal {
+            display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%;
+            overflow: auto; background-color: rgba(0,0,0,0.8); /* Fond plus sombre pour mieux ressortir */
+        }
+        .modal-content {
+            background-color: var(--color-bg-card); margin: 10% auto; padding: 25px;
+            border: 1px solid var(--color-border); width: 90%; max-width: 700px;
+            border-radius: 10px; box-shadow: 0 5px 25px rgba(0,0,0,0.5);
+            position: relative;
+        }
+        .close-btn {
+            color: var(--color-text-secondary); float: right; font-size: 28px; font-weight: bold;
+            cursor: pointer;
+        }
+        .close-btn:hover, .close-btn:focus { color: var(--color-error); text-decoration: none; }
+        .modal-content h3 { border-bottom: 1px solid var(--color-border); padding-bottom: 10px; }
+        .modal-detail-row {
+            padding: 5px 0; border-bottom: 1px dotted var(--color-border);
+        }
+        .modal-detail-row strong { color: var(--color-primary); min-width: 120px; display: inline-block; }
+        .modal-message {
+            background-color: var(--color-log-bg); 
+            padding: 15px; 
+            border-radius: 4px; 
+            font-family: monospace;
+            white-space: pre-wrap;
+            font-size: 0.9em;
+            margin-top: 10px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body class="dark-mode">
+    <header class="navbar">
+        <h1 class="logo">🕸️ Bug Seeker</h1>
+        <div class="status-group">
+            <button class="theme-toggle-btn" onclick="toggleTheme()">☀️ / 🌙</button>
+            <div class="status-pill status-running" id="job-status">Statut: **EN COURS**</div>
+            <div class="status-pill status-error" id="error-alert">Alertes: **0**</div>
+        </div>
+    </header>
+
+    <main class="dashboard-layout">
+        <div class="kpi-card"><span class="kpi-label">Success Scraped</span><p id="metric-items-scraped" class="kpi-value">0</p></div>
+        <div class="kpi-card"><span class="kpi-label">Failed to Scrap</span><p id="metric-throughput" class="kpi-value">0</p></div>
+        <div class="kpi-card"><span class="kpi-label">Error Rate</span><p id="metric-error-rate" class="kpi-value error-level">0.00%</p></div>
+        <div class="kpi-card"><span class="kpi-label">Not Done</span><p id="metric-latency" class="kpi-value">0.0</p></div>
+        
+        <div class="content-card log-stream-card span-4" id="logTableContainer">
+            <h2>📜 Logs</h2>
+            <button class="expand-btn" id="expandLogBtn" onclick="toggleFullscreen('logTableContainer')">⛶</button>
+            <button class="expand-btn" id="dexpandLogBtn" style="display: none;" onclick="toggleFullscreen('logTableContainer')">⛶</button>
+            
+            <div class="log-controls">
+                <input type="text" id="log-filter-unified" placeholder="Search ...">
+                <input type="date" id="date-from" title="Date de début">
+                <input type="date" id="date-to" title="Date de fin">
+            </div>
+            
+            <div id="log-display" class="log-display-area">
+                </div>
+        </div>
+    </main>
+
+    <div id="logModal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn" onclick="closeModal()">&times;</span>
+            <h3>Détails du Log</h3>
+            <div class="modal-detail-row"><strong>Niveau:</strong> <span id="modal-level"></span></div>
+            <div class="modal-detail-row"><strong>Date/Heure:</strong> <span id="modal-datetime"></span></div>
+            <div class="modal-detail-row"><strong>Spider:</strong> <span id="modal-spider"></span></div>
+            <div class="modal-detail-row"><strong>URL:</strong> <span id="modal-url"></span></div>
+            
+            <p><strong>Message Complet:</strong></p>
+            <pre id="modal-message" class="modal-message"></pre>
+        </div>
+    </div>
+
+    <script>
+        // --- JavaScript Logic ---
+
+        // MOCK DATA (Simule les logs avec plus de détails pour la modale)
+        const mockData = {
+            currentMetrics: {
+                totalScraped: 50,
+                throughput: 5, 
+                currentErrorRate: 95, 
+                avgLatency: 5,
+                status: 'RUNNING'
+            },
+            recentLogs: [
+                { date: '2025-10-02', time: '10:35:10', level: 'ERROR', spider: 'price_checker', url: 'site-a.com/product/123', message: 'Received HTTP 403 Forbidden. Proxy rotation failed.', detail: "Traceback (most recent call last):\n  File \"/scraper/pipelines.py\", line 45, in process_item\n    raise DropItem(\"403 Forbidden received after 5 retries.\")\nDropItem: 403 Forbidden received after 5 retries. Proxy: 104.28.245.244" },
+                { date: '2025-10-02', time: '10:35:05', level: 'WARNING', spider: 'details_scraper', url: 'site-d.com/page/5', message: 'Missing "price" field on scraped item. Check selectors.', detail: "Warning: The XPath //div[@id='product-price'] returned an empty list. The price field was defaulted to 0.00. This requires immediate investigation." },
+                { date: '2025-10-01', time: '09:00:00', level: 'INFO', spider: 'price_checker', url: 'site-e.com/page/1', message: 'Successfully scraped 10 items. Pipeline operating normally.', detail: "Log INFO: Starting crawl for 100 pages. Memory usage low (150MB). CPU load normal (20%)." },
+                { date: '2025-09-30', time: '18:15:00', level: 'ERROR', spider: 'details_scraper', url: 'site-b.com/item/404', message: 'HTTP 404 Not Found. Page may have been deleted.', detail: "Error: Failed to fetch URL. HTTP status code 404. Referer: site-c.com/index. The page is permanently gone. URL marked for removal." },
+                { date: '2025-10-02', time: '10:34:50', level: 'WARNING', spider: 'price_checker', url: 'site-f.com/product/99', message: 'Scraped 0 items. Possible soft block detected.', detail: "Warning: Page rendered but no target items were extracted. Check if CAPTCHA or invisible block is active on site-f." },
+            ]
+        };
+
+        // --- Fonctions de Modale ---
+        function openModal(log) {
+            document.getElementById('modal-level').textContent = log.level;
+            document.getElementById('modal-datetime').textContent = `${log.date} ${log.time}`;
+            document.getElementById('modal-spider').textContent = log.spider;
+            document.getElementById('modal-url').textContent = log.url;
+            document.getElementById('modal-message').textContent = log.detail || log.message; // Afficher detail si dispo
+            
+            // Appliquer la couleur du niveau de log
+            const levelSpan = document.getElementById('modal-level');
+            levelSpan.className = `log-${log.level.toLowerCase()}`;
+            
+            document.getElementById('logModal').style.display = 'block';
+        }
+
+        function closeModal() {
+            document.getElementById('logModal').style.display = 'none';
+        }
+
+        // Fermer la modale en cliquant en dehors
+        window.onclick = function(event) {
+            if (event.target == document.getElementById('logModal')) {
+                closeModal();
+            }
+        }
+
+        // --- Fonctions de Thème ---
+        function toggleTheme() {
+            document.body.classList.toggle('light-mode');
+            document.body.classList.toggle('dark-mode');
+        }
+
+        // --- Fonctions de Plein Écran (Toggle) ---
+        function toggleFullscreen(containerId) {
+            const container = document.getElementById(containerId);
+            const button = document.getElementById('expandLogBtn');
+            
+            container.classList.toggle('fullscreen-table');
+            
+            if (container.classList.contains('fullscreen-table')) {
+                // Mode Plein Écran (Icône Réduire)
+                button.textContent = '⛶'; 
+                document.body.style.overflow = 'hidden'; 
+            } else {
+                // Mode Normal (Icône Agrandir)
+                button.textContent = '⛶'; 
+                document.body.style.overflow = '';
+            }
+        }
+        
+        // --- Core Functions ---
+
+        // 1. Mise à jour des KPI (Inchangé)
+        function updateMetrics(metrics) {
+            document.getElementById('metric-items-scraped').textContent = metrics.totalScraped.toLocaleString();
+            document.getElementById('metric-throughput').textContent = metrics.throughput;
+            document.getElementById('metric-latency').textContent = metrics.avgLatency;
+            
+            const errorRateEl = document.getElementById('metric-error-rate');
+            errorRateEl.textContent = `${metrics.currentErrorRate.toFixed(2)}%`;
+            
+            const errorAlertEl = document.getElementById('error-alert');
+            
+            if (metrics.currentErrorRate > 8.0) {
+                errorAlertEl.textContent = `ALERTES: Taux ÉLEVÉ`;
+                errorAlertEl.classList.add('status-error');
+                errorAlertEl.classList.remove('status-running'); // S'assurer que le statut est clair
+                errorRateEl.style.color = 'var(--color-error)';
+            } else {
+                errorAlertEl.textContent = `ALERTES: OK`;
+                errorAlertEl.classList.remove('status-error');
+                errorAlertEl.style.backgroundColor = 'var(--color-success)';
+                errorRateEl.style.color = 'var(--color-primary)';
+            }
+        }
+
+        // 2. Rendu du Flux de Logs
+        function renderLogStream(logs, filterText = '', dateFrom = '', dateTo = '') {
+            const logDisplay = document.getElementById('log-display');
+            logDisplay.innerHTML = '';
+            
+            const filter = filterText.toLowerCase();
+            const fromDate = dateFrom ? new Date(dateFrom) : null;
+            const toDate = dateTo ? new Date(dateTo) : null;
+            
+            const reversedLogs = [...logs].reverse(); 
+
+            reversedLogs.forEach(log => { 
+                const logDate = new Date(log.date);
+
+                const matchesTextOrLevel = !filter || 
+                    log.url.toLowerCase().includes(filter) ||
+                    log.message.toLowerCase().includes(filter) ||
+                    log.spider.toLowerCase().includes(filter) ||
+                    log.level.toLowerCase().includes(filter); 
+
+                const matchesDate = 
+                    (!fromDate || logDate >= fromDate) &&
+                    (!toDate || logDate <= toDate);
+
+
+                if (matchesTextOrLevel && matchesDate) {
+                    const logEntry = document.createElement('div');
+                    logEntry.classList.add('log-entry', `log-${log.level.toLowerCase()}`);
+                    
+                    logEntry.innerHTML = `
+                        <span class="log-time">[${log.date} ${log.time}]</span> 
+                        <span class="log-level">${log.level}</span> 
+                        <span class="log-spider">(${log.spider})</span>: 
+                        <span class="log-message">${log.message}</span>
+                        <span class="log-url"> - ${log.url}</span>
+                    `;
+                    
+                    // AJOUT: Ajouter l'événement onclick pour ouvrir la modale
+                    logEntry.onclick = () => openModal(log);
+                    
+                    logDisplay.appendChild(logEntry);
+                }
+            });
+        }
+
+        // --- Initialisation et Écouteurs d'Événements ---
+        function fetchDataAndRender() {
+            // 1. Update Metrics
+            updateMetrics(mockData.currentMetrics);
+            
+            // 2. Render Log Stream (Apply current filters)
+            const filterText = document.getElementById('log-filter-unified').value;
+            const dateFrom = document.getElementById('date-from').value;
+            const dateTo = document.getElementById('date-to').value;
+            
+            renderLogStream(mockData.recentLogs, filterText, dateFrom, dateTo);
+        }
+
+        // Écouteurs pour les filtres
+        document.getElementById('log-filter-unified').addEventListener('input', fetchDataAndRender);
+        document.getElementById('date-from').addEventListener('change', fetchDataAndRender);
+        document.getElementById('date-to').addEventListener('change', fetchDataAndRender);
+
+        // Initialisation à l'ouverture de la page
+        document.addEventListener('DOMContentLoaded', () => {
+             const today = new Date().toISOString().split('T')[0];
+             document.getElementById('date-to').value = today;
+             fetchDataAndRender(); 
+        });
+        
+    </script>
+</body>
+</html>
